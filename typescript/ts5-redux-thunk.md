@@ -1,5 +1,92 @@
 # 타입스트립트로 리덕스 미들웨어 사용하기(redux-thunk)
 
+## 모듈 분리하기
+
+- 파일이 많아지면 관리하기가 힘들어짐
+  - 다음과 같이 분리하면 편함
+
+```
+modules
+	todos
+		actions.ts
+		index.ts
+		reducer.ts
+		types.ts
+	counter.ts - 파일이 길지 않은 경우 파일 하나로 작성
+```
+
+- actions.ts 파일에는 액션을 export 하고 만들어 주도록 함
+
+```tsx
+import { createAction } from 'typesafe-actions';
+
+let nextId = 1;
+
+export const ADD_TODO = 'todos/ADD_TODO' as const;
+export const TOGGLE_TODO = 'todos/TOGGLE_TODO';
+export const REMOVE_TODO = 'todos/REMOVE_TODO';
+
+export const addTodo = (text: string) => ({
+  type: ADD_TODO,
+  payload: {
+    id: nextId++,
+    text,
+  }
+});
+export const toggleTodo = createAction('todos/TOGGLE_TODO')<number>();
+export const removeTodo = createAction('todos/REMOVE_TODO')<number>();
+```
+
+- types.ts 파일에는 액션타입을 비롯한 타입들을 모두 export(actions.ts를 불러와서 사용)
+
+```tsx
+import { ActionType } from 'typesafe-actions';
+import * as actions from './actions';
+
+export type TodosAction = ActionType<typeof actions>;
+
+export type Todo = {
+  id: number;
+  text: string;
+  done: boolean;
+}
+
+export type TodosState = Todo[];
+```
+
+- reducer.ts 파일에서는 리듀서와 initialState만
+
+```tsx
+import { createReducer } from 'typesafe-actions';
+import { TodosState, TodosAction } from './types';
+import { ADD_TODO, TOGGLE_TODO, REMOVE_TODO } from './actions';
+
+const initialState: TodosState = [];
+
+const todos = createReducer<TodosState, TodosAction>(initialState, {
+  [ADD_TODO]: (state, action) => state.concat({
+    ...action.payload,
+    done: false
+  }),
+  [TOGGLE_TODO]: (state, action) => state.map(todo => todo.id === action.payload ? {...todo, done: !todo.done} : todo),
+  [REMOVE_TODO]: (state, action) => state.filter(todo => todo.id !== action.payload)
+})
+
+export default todos;
+```
+
+- index.ts에서는 모든 파일들을 불러와서 그대로 내보내줌
+
+```tsx
+export { default } from './reducer';
+export * from './actions';
+export * from './types';
+```
+
+<br />
+
+## 미들웨어 사용하기
+
 - index.ts에 import Thunk를 한 뒤 applyMiddleware를 불러옴
 
 ```tsx
@@ -179,15 +266,19 @@ const github = createReducer<GithubState, GithubAction>(initialState, {
   }),
   [GET_USER_PROFILE_SUCCESS]: (state, action) => ({
     ...state,
-    loading: false,
-    error: null,
-    data: action.payload,
+    userProfile: {
+      loading: false,
+      error: null,
+      data: action.payload,
+    }
   }),
   [GET_USER_PROFILE_ERROR]: (state, action) => ({
     ...state,
-    loading: false,
-    error: action.payload,
-    data: null,
+    userProfile: {
+      loading: false,
+      error: action.payload,
+      data: null,
+    }
   }),
 });
 
